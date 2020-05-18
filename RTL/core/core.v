@@ -30,6 +30,8 @@
 `define RCC     7'b01100_11      // arithmic   rd,rs1,rs2 
 `define MAC     7'b11111_11      // mac   rd,rs1,rs2
 `define __RESETSP__ 32'd8192     //define sp_reset
+
+
 // not implemented opcodes:
 
 
@@ -78,6 +80,23 @@ module core(
 	 //32 bits all 0 and -1, trick from darkrisc :)
 	 wire [31:0] ALL0  = 0;
     wire [31:0] ALL1  = -1;
+	 //Branch Prediction parameters
+	 wire[1:0] STRONGLY_TAKEN=2'b11;
+	 wire[1:0] WEAKLY_TAKEN=2'b10;
+	 wire[1:0] WEAKLY_NOT_TAKEN =2'b01;
+	 wire[1:0] STRONGLY_NOT_TAKEN=2'b00;
+	 
+	 //branch history table
+	 reg [33:0] BTB [0:255];
+	 //initialy set all buffer to 0
+	 integer i;
+    initial
+    begin
+        for(i=0;i!=256;i=i+1)
+        begin        
+            BTB[i] = 0;
+        end
+	 end
 	 
 	 always@(posedge clk)
 	 begin
@@ -118,11 +137,18 @@ module core(
 					in_data[6:0] == `LUI || 
 					in_data[6:0] == `AUIPC ? {in_data[31:12], ALL0[11:0]} :  //u-type
 							{in_data[31] ? ALL1[31:12]:ALL0[31:12], in_data[31:20]};  //i-type
+			//assign the branch history table when first met branch
+		   if(in_data[6:0] == `BCC && (!FLUSH) && (BTB[in_addr[11:2]] == 0))
+			begin
+				BTB[in_addr[11:2]] <= {WEAKLY_TAKEN/*always predict taken first*/,XSIMM};
+			end
+
 		end
 	 end
-	 
-	 reg FLUSH = -1; //flush instruction for piepline
-	 
+	 //2-stage
+	 //reg FLUSH = -1;  
+	 reg[1:0] FLUSH = -1; //flush instruction for piepline for 3 stage
+	 reg B_result = -1; //branch prediction result
 	 reg[4:0] RESMODE = 0;
 	 
 	 //this part is for sp_reset reference the idea from darkrisc
@@ -152,10 +178,10 @@ module core(
     
     wire    RCC = FLUSH ? 0 : XRCC; // OPCODE==7'b0110011; FCT3 arithmic register
     wire    MAC = FLUSH ? 0 : XMAC; // OPCODE==7'b0110011; FCT3 mac rd rs1 rs2 
-	 
+	 	 
 	 //finish op code decode
 	 
-	 //reg [31:0] NXPC2; //program counter next two instruction
+	 reg [31:0] NXPC2; //program counter next two instruction for 3 stage
 	 reg [31:0] NXPC;  //program counter next instruction
 	 reg[31:0] PC;     //program counter register
 	 
@@ -236,14 +262,24 @@ module core(
 	 wire        JREQ = (JAL||JALR||BMUX);
 	 //jump to instuction address or direct on current PC
     wire [31:0] JVAL = SIMM + (JALR? U1REG/*jump register?*/ : PC /*branch or direct jump on current PC*/);
-	 
-	 
+	
 	 //Main data workflow Clock
 	 always@(posedge clk)
 	 begin
 			RESMODE <= RESMODE + 1;                //for sp_reset
-			FLUSH <= res ? 1 : halt ? FLUSH : (JAL||JALR||BMUX); //flush the piepline
-									 
+			//FLUSH <= res ? 1 : halt ? FLUSH : (JAL||JALR||BMUX); //flush the piepline 2 stage
+			FLUSH <= res ? 1 : halt ? FLUSH : FLUSH ? FLUSH -1 : (JAL||JALR||BMUX) ? 2: 0; //flush the piepline for 3 stage
+			//branch prediction correctness
+			//1: correct 0: wrong
+			B_result <= BMUX ? (BTB[PC[11:2]][33] == 1 ? 1:0) : (BTB[PC[11:2]][33] == 1 ? 0:1);
+			//state machine for prediction
+			BTB[PC[11:2]][33:32] <= BTB[PC[11:2]][33:32] == STRONGLY_TAKEN ? (BMUX? STRONGLY_TAKEN : WEAKLY_TAKEN ):
+											BTB[PC[11:2]][33:32] == WEAKLY_TAKEN ? (BMUX? STRONGLY_TAKEN : WEAKLY_NOT_TAKEN ):
+											BTB[PC[11:2]][33:32] == WEAKLY_NOT_TAKEN ? (BMUX? WEAKLY_TAKEN : STRONGLY_NOT_TAKEN ):
+											BTB[PC[11:2]][33:32] == STRONGLY_NOT_TAKEN ? (BMUX? WEAKLY_NOT_TAKEN : STRONGLY_NOT_TAKEN ):
+																			WEAKLY_TAKEN;
+													  
+		
 			//assign two register
 			REG1[DPTR] <=   res ?  (RESMODE[4:0]==2 ? `__RESETSP__ : 0)  :   //reset sp
 											  halt ? REG1[DPTR]:   //halt
@@ -264,9 +300,15 @@ module core(
 											  MCC || RCC ? RMDATA: //r-type take alu out
 											  REG2[DPTR];
 			//program counter decode for next pc
+			/*2stage
 			NXPC <= res ? 32'd0: halt ? NXPC:     //reset and halt
 							   JREQ ? JVAL:    //jump & link, jump & link register, branch instruction
 								            NXPC + 4; //acting normal to next instruction pc = pc + 4
+			*/
+			NXPC <= halt ? NXPC : NXPC2;
+			NXPC2 <= res ? 32'd0 : halt ? NXPC2: //reset and halt
+								JREQ ? JVAL:          //jump & link, jump & link register, branch instruction
+								NXPC2+4;              //acting normal to next instruction pc = pc + 4
 			//change current pc
 			PC <= halt ? PC : NXPC;
 											  
@@ -286,6 +328,7 @@ module core(
                 FCT3==1||FCT3==5 ? ( address[1]==1   ? 4'b1100 : // sh/lh half
                                                      4'b0011 ) :
                                                      4'b1111; // sw/lw
-	 assign in_addr = NXPC;
+	 //assign in_addr = NXPC; //2 stage
+	 assign in_addr = NXPC2; // 3 stage
 	 
 endmodule

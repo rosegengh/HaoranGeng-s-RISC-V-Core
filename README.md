@@ -75,8 +75,19 @@ The result of simulation
 
 Things to do in next commit:
 1. Branch predictor
-2. Uart for fpga
-
+2. 3-stage piepline
+##Second Commit (5/18/2020)
+implementation:
+1. Change the 2-stage piepline into 3-stage piepline
+2. branch history table for branch prediction
+Update the originial processor into 3-stage piepline to implemented the branch prediction feature:
+1.Adding a new Next pc 2 index of the next 2 instruction
+2.Adding the wait state on read-modify-write operation for 3-stage piepline
+3.All the previous test on 2-stage design run through the 3-stage design
+I also implemented the branch history table which record the branch prediction index and previous branch result.
+Hopefully I can finish branch prediction later this week
+Things tp do in next commit
+1. Branch Predictor
 ## Authors
 
 * **Haoran Geng**  [rosegengh](https://github.com/rosegengh)

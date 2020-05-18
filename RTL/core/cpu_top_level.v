@@ -72,6 +72,7 @@ module cpu_top_level(
 	 
 	 always @(posedge clk)
 	 begin
+		 if(!halt) //3 stage
 		 ROMFF <= ROM[in_addr[11:2]]; //reading the instruction from ROM
 	 end
 	 
@@ -81,11 +82,9 @@ module cpu_top_level(
 	 
 	 reg [31:0] RAMFF; //data memory data
 	 //performing wait_stage for reading RAM memroy
-	 
 	 reg[1:0] DACK = 0;
 	 wire writeHit = 1;  //write memory hit
 	 wire dataHit = ! ((write_e || read_e) && DACK != 1);  //data hit
-	 
 	 always@(posedge clk) 
     begin
         DACK <= res ? 0 : DACK ? DACK-1 : (read_e||write_e) ? 1 : 0; // wait-states
@@ -98,7 +97,8 @@ module cpu_top_level(
 	 end
 	 
 	 reg [31:0] IOMUXFF;
-	 //write memory
+	 //write memory 2 stage
+	 /*
 	 always @(posedge clk)
 	 begin
 			if(write_e && address[31] == 0 && BE[3]) RAM[address[11:2]][31: 24] <= data_out[31: 24];
@@ -107,7 +107,20 @@ module cpu_top_level(
 			if(write_e && address[31] == 0 && BE[0]) RAM[address[11:2]][7: 0] <= data_out  [7:   0];
 			IOMUXFF <= IOMUX[address[3:2]]; // read w/ 2 wait-states
 			
-	 end  
+	 end
+	*/
+	 //write memory 3 stage
+	 always @(posedge clk)
+	 begin
+		if(!halt && write_e && address[31] == 0)
+		begin
+			RAM[address[11:2]] <= {BE[3] ? data_out[31:24] : RAMFF[31:24],
+									     BE[2] ? data_out[23:16] : RAMFF[23:16],
+										  BE[1] ? data_out[15:8] : RAMFF[15:8],
+										  BE[0] ? data_out[7:0] : RAMFF[7:0]};
+		end
+		IOMUXFF <= IOMUX[address[3:2]];
+	 end
 	 //load data from ram
 	 assign data_in = address[31] ?  IOMUXFF  : RAMFF; 
 	 assign halt = !hit||!dataHit||!writeHit;
@@ -127,7 +140,8 @@ module cpu_top_level(
 	 end
 	 
 	 core core0(
-		.clk(!clk),
+		//.clk(!clk), 2-stage
+		.clk(clk),
 		.res(res),
 		.halt(halt),
 		.in_data(in_data), //instruction data
