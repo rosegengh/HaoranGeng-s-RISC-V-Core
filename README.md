@@ -71,7 +71,10 @@ jal x13,-14
 sw x0,x12,12
 ```
 It caculates the greatest common divider of 442 and 286 and stores it into the memory. 
+
 The result of simulation
+
+![](image/Output-commit%201.png)
 
 Things to do in next commit:
 1. Branch predictor
