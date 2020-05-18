@@ -34,7 +34,7 @@ The marked symbol represents the feature that is already been implemented and te
 implemented in later commit. The performance of the core will be test on Xilinx spartan-6 fpga. The performance 
 report and graphics will be generated in later commit.
 
-##Directory
+## Directory
 This section is the description of the directory and how to use it
 - [RTL] The verilog code of cpu core
 	- [core] contains the verilog code of the RISC-V core and a cpu_top_level, which has the core and memory connected
@@ -50,7 +50,7 @@ python assembler.py
 The result will be written in hex in binary_instruction.txt. Please notice that only the last 8 digits count
 
 - [image] contains the image for the documentation
-##Initial Commit (5/6/2020)
+## Initial Commit (5/6/2020)
 Implemented the basic RV32I instruction set (expect csr,break, fence) and tested the instuction through ISim.
 Implementation:
 1. two-stage piepline 
@@ -76,7 +76,7 @@ The result of simulation
 Things to do in next commit:
 1. Branch predictor
 2. 3-stage piepline
-##Second Commit (5/18/2020)
+## Second Commit (5/18/2020)
 implementation:
 1. Change the 2-stage piepline into 3-stage piepline
 2. branch history table for branch prediction
