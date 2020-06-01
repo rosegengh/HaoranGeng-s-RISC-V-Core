@@ -76,7 +76,8 @@ module core(
 	 
 	 reg[31:0] XSIMM;  //signal extended immediate
 	 reg[31:0] XUIMM;  //non-signal extended immediate
-	 
+	 //branch history table
+	 reg [33:0] BTB [0:255];
 	 //32 bits all 0 and -1, trick from darkrisc :)
 	 wire [31:0] ALL0  = 0;
     wire [31:0] ALL1  = -1;
@@ -85,9 +86,8 @@ module core(
 	 wire[1:0] WEAKLY_TAKEN=2'b10;
 	 wire[1:0] WEAKLY_NOT_TAKEN =2'b01;
 	 wire[1:0] STRONGLY_NOT_TAKEN=2'b00;
+	 wire[1:0] BDESICION = BTB[PC[11:2]][33:32];
 	 
-	 //branch history table
-	 reg [33:0] BTB [0:255];
 	 //initialy set all buffer to 0
 	 integer i;
     initial
@@ -114,7 +114,7 @@ module core(
 			XMCC   <= in_data[6:0] == `MCC;
 			XMAC  <= in_data[6:0] == `MAC;
 			XRCC   <= in_data[6:0] == `RCC;
-			
+	
 			//capture only the imm value unsign extended the rest
 			XUIMM <=
 					in_data[6:0] == `JAL ?
@@ -137,20 +137,15 @@ module core(
 					in_data[6:0] == `LUI || 
 					in_data[6:0] == `AUIPC ? {in_data[31:12], ALL0[11:0]} :  //u-type
 							{in_data[31] ? ALL1[31:12]:ALL0[31:12], in_data[31:20]};  //i-type
-			//assign the branch history table when first met branch
-		   if(in_data[6:0] == `BCC && (!FLUSH) && (BTB[in_addr[11:2]] == 0))
-			begin
-				BTB[in_addr[11:2]] <= {WEAKLY_TAKEN/*always predict taken first*/,XSIMM};
-			end
+			
+																			
 
 		end
 	 end
 	 //2-stage
 	 //reg FLUSH = -1;  
 	 reg[1:0] FLUSH = -1; //flush instruction for piepline for 3 stage
-	 reg B_result = -1; //branch prediction result
 	 reg[4:0] RESMODE = 0;
-	 
 	 //this part is for sp_reset reference the idea from darkrisc
 	 // use for halt signal
 	 wire[4:0] DPTR = res ? RESMODE:XIDATA[11:7]; //set_sp reset
@@ -163,7 +158,9 @@ module core(
 	 
 	 wire [31:0] SIMM  = XSIMM;
     wire [31:0] UIMM  = XUIMM;
-	 
+	 //branch target address
+	 wire [31:0] branch_target = (in_data[6:0] == `BCC) ? {in_data[31] ? ALL1[31:13]:ALL0[31:13], in_data[31],in_data[7],in_data[30:25],in_data[11:8],ALL0[0] } : 0;
+
 	 //op_code decoder:
 	 // if used for piepline flush, opcode = 0
     wire    LUI = FLUSH ? 0 : XLUI;   // OPCODE==7'b0110111;  lui rd imm
@@ -250,7 +247,7 @@ module core(
 	 //Branch instruction (OPCODE==7'b1100011)
 	 
 	 //Store the branch value inside the BMUX
-	 wire BMUX = BCC == 1 && (                            //first check it is an sb-type instruction
+	 wire BMUX = XBCC == 1 && (                            //first check it is an sb-type instruction
 									  FCT3==0 ? (U1REG==U2REG ? 1:0) :  //BEQ branch equal to
 									  FCT3==1 ? (U1REG!=U2REG ? 1:0) :  //BNE branch not equal to
 									  FCT3==4 ? (S1REG< S2REG ? 1:0) :  //BLT branch less than signed
@@ -259,7 +256,7 @@ module core(
 									  FCT3==7 ? (U1REG>U2REG ? 1:0) :   //BGEU branch greater than unsigned
 									  0);
 	 //get the instruction address value by jump, jump register and branch
-	 wire        JREQ = (JAL||JALR||BMUX);
+	 wire        JREQ = (JAL||JALR);
 	 //jump to instuction address or direct on current PC
     wire [31:0] JVAL = SIMM + (JALR? U1REG/*jump register?*/ : PC /*branch or direct jump on current PC*/);
 	
@@ -268,18 +265,8 @@ module core(
 	 begin
 			RESMODE <= RESMODE + 1;                //for sp_reset
 			//FLUSH <= res ? 1 : halt ? FLUSH : (JAL||JALR||BMUX); //flush the piepline 2 stage
-			FLUSH <= res ? 1 : halt ? FLUSH : FLUSH ? FLUSH -1 : (JAL||JALR||BMUX) ? 2: 0; //flush the piepline for 3 stage
-			//branch prediction correctness
-			//1: correct 0: wrong
-			B_result <= BMUX ? (BTB[PC[11:2]][33] == 1 ? 1:0) : (BTB[PC[11:2]][33] == 1 ? 0:1);
-			//state machine for prediction
-			BTB[PC[11:2]][33:32] <= BTB[PC[11:2]][33:32] == STRONGLY_TAKEN ? (BMUX? STRONGLY_TAKEN : WEAKLY_TAKEN ):
-											BTB[PC[11:2]][33:32] == WEAKLY_TAKEN ? (BMUX? STRONGLY_TAKEN : WEAKLY_NOT_TAKEN ):
-											BTB[PC[11:2]][33:32] == WEAKLY_NOT_TAKEN ? (BMUX? WEAKLY_TAKEN : STRONGLY_NOT_TAKEN ):
-											BTB[PC[11:2]][33:32] == STRONGLY_NOT_TAKEN ? (BMUX? WEAKLY_NOT_TAKEN : STRONGLY_NOT_TAKEN ):
-																			WEAKLY_TAKEN;
-													  
-		
+			FLUSH <= res ? 1 : halt ? FLUSH : FLUSH ? FLUSH -1 : (JAL||JALR) ? 2: (XBCC) ? (BMUX ? 1:2):0  ; //flush the piepline for 3 stage
+			//FLUSH <= res ? 1 : halt ? FLUSH : FLUSH ? FLUSH -1 : (JAL||JALR||BMUX) ? 2:0;
 			//assign two register
 			REG1[DPTR] <=   res ?  (RESMODE[4:0]==2 ? `__RESETSP__ : 0)  :   //reset sp
 											  halt ? REG1[DPTR]:   //halt
@@ -305,11 +292,29 @@ module core(
 							   JREQ ? JVAL:    //jump & link, jump & link register, branch instruction
 								            NXPC + 4; //acting normal to next instruction pc = pc + 4
 			*/
+			//state machine for prediction
+			//assign the branch history table when first met branch
+			if(XBCC && (BTB[PC[11:2]] == 0))
+				BTB[PC[11:2]] <= {WEAKLY_TAKEN,SIMM};
+			
+			if(XBCC && (BTB[PC[11:2]] != 0))
+				BTB[PC[11:2]][33:32] <= 	BTB[PC[11:2]][33:32] == STRONGLY_TAKEN ? (BMUX? STRONGLY_TAKEN: WEAKLY_TAKEN ):
+											BTB[PC[11:2]][33:32] == WEAKLY_TAKEN ? (BMUX? STRONGLY_TAKEN : WEAKLY_NOT_TAKEN):
+											BTB[PC[11:2]][33:32] == WEAKLY_NOT_TAKEN ? (BMUX? WEAKLY_TAKEN : STRONGLY_NOT_TAKEN ):
+											BTB[PC[11:2]][33:32] == STRONGLY_NOT_TAKEN ? (BMUX? WEAKLY_NOT_TAKEN : STRONGLY_NOT_TAKEN ):
+																			WEAKLY_TAKEN;
+
+			//change current pc
 			NXPC <= halt ? NXPC : NXPC2;
 			NXPC2 <= res ? 32'd0 : halt ? NXPC2: //reset and halt
 								JREQ ? JVAL:          //jump & link, jump & link register, branch instruction
+								//always predict taken when first meet branch
+								(in_data[6:0] == `BCC && BTB[NXPC[11:2]] == 0 &&FLUSH == 0 )? NXPC + branch_target:
+								//behave branch prediction depends on branch history table
+								(in_data[6:0] == `BCC &&BTB[NXPC[11:2]][33] &&FLUSH == 0 )?  NXPC+BTB[NXPC[11:2]][31:0]:
+								(XBCC && !BMUX  ) ? PC+4 :
 								NXPC2+4;              //acting normal to next instruction pc = pc + 4
-			//change current pc
+
 			PC <= halt ? PC : NXPC;
 											  
 	 end

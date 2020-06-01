@@ -71,7 +71,10 @@ jal x13,-14
 sw x0,x12,12
 ```
 It caculates the greatest common divider of 442 and 286 and stores it into the memory. 
+
 The result of simulation
+
+![](image/Output-commit%201.png)
 
 Things to do in next commit:
 1. Branch predictor
@@ -84,15 +87,58 @@ implementation:
 Update the originial processor into 3-stage piepline to implemented the branch prediction feature:
 
 1.Adding a new Next pc 2 index of the next 2 instruction
+
 2.Adding the wait state on read-modify-write operation for 3-stage piepline
+
 3.All the previous test on 2-stage design run through the 3-stage design
 
 I also implemented the branch history table which record the branch prediction index and previous branch result.
-Hopefully I can finish branch prediction later this week
 
 Things to do in next commit
-
 1. Branch Predictor
+
+
+## Third Commit (6/1/2020) Branch predictor!!!!!! (80%done)
+implementation:
+1.2 bits branch predictor 
+2.Branch predictor can run through 80% of the test case
+3.Roughly reduced 30% of clock cycle on 3-stage piepline architecture
+
+After 2 weeks of debuging and testing, I finally get my version of branch predictor partially done on my RISCV core.
+I want to save this stage of work so I made the third commit today. As a researcher longing for innovation, I tried to make the 
+branch predictor by my own. Figure 1 shows the work flow of branch predictor unit.
+
+![](image/BranchPredictorWorkFlow.png)
+Figure 1 - Branch predictor work flow diagram
+
+When the processor first met branch instruction, it will always predict the branch is taken. It will directly add the branch target to
+the NXPC2 (which is the next two instruction compare to the current program counter (PC) value). The processor will keep track of the branch instruction information
+inside the branch history table (BTB). Figure 2 shows the example index of the branch history table.
+
+![](image/BTB.png)
+Figure 2 - Example of Branch History Table
+
+The BTB is a 256 elements memory of 33-bit wide reg. The address of the BTB is the address of branch instructions. BTB[33:32] is the prediction status. BTB[31:0] is the branch target
+Figure 3 shows the finite state machine of prediction status.
+
+![](image/state.png)
+Figure 3 - Finite State Machine of Branch pridiction status
+
+The most significant bit of the branch status represent the prediction result: 0 : not taken, 1 : taken. When the instruction meet the branch instruction again, it will
+acting the predict according to the prediction status value. When the actual branch result comes out, the processor will first update the branch prediction status inside 
+BTB. When predict branch taken and prediction is correct, the processor only need to flush the instruction next to the branch instruction (save 1 cycle here!!). When the prediction 
+is wrong, the proecssor need to flush the next two instructions and set the NXPC2 to the next instruction (lose 1 cycle here). When predict branch not taken and predicrtion
+is correct, the processor will keep going. When prediction is wrong, the processor need to flush the next instruction and set the NXPC2 to branch target. Since the branch prediction 
+will acting correct for most of the time, the processor roughly becomes 30% faster (3 stage). When adding more and more piepline stage, the branch predictor will act better and better.
+
+However the branch predictor can run perfectly when there is no two consecutive branch instuction. When there is two consecutive branch instruction, the piepline flush is acting wrong. I'm still
+testing and debuging it. When my branch predictor can run through all the test case, I will do the branch prediction accuracy test and post the result.
+
+
+Things to do in next commit
+1.Finish Branch Predictor
+2.Branch Predictor accuracy test
+
 ## Authors
 
 * **Haoran Geng**  [rosegengh](https://github.com/rosegengh)
