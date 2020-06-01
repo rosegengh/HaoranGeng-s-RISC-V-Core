@@ -100,8 +100,11 @@ Things to do in next commit
 
 ## Third Commit (6/1/2020) Branch predictor!!!!!! (80%done)
 implementation:
+
 1.2 bits branch predictor 
+
 2.Branch predictor can run through 80% of the test case
+
 3.Roughly reduced 30% of clock cycle on 3-stage piepline architecture
 
 After 2 weeks of debuging and testing, I finally get my version of branch predictor partially done on my RISCV core.
@@ -109,6 +112,7 @@ I want to save this stage of work so I made the third commit today. As a researc
 branch predictor by my own. Figure 1 shows the work flow of branch predictor unit.
 
 ![](image/BranchPredictorWorkFlow.png)
+
 Figure 1 - Branch predictor work flow diagram
 
 When the processor first met branch instruction, it will always predict the branch is taken. It will directly add the branch target to
@@ -116,12 +120,14 @@ the NXPC2 (which is the next two instruction compare to the current program coun
 inside the branch history table (BTB). Figure 2 shows the example index of the branch history table.
 
 ![](image/BTB.png)
+
 Figure 2 - Example of Branch History Table
 
 The BTB is a 256 elements memory of 33-bit wide reg. The address of the BTB is the address of branch instructions. BTB[33:32] is the prediction status. BTB[31:0] is the branch target
 Figure 3 shows the finite state machine of prediction status.
 
 ![](image/state.png)
+
 Figure 3 - Finite State Machine of Branch pridiction status
 
 The most significant bit of the branch status represent the prediction result: 0 : not taken, 1 : taken. When the instruction meet the branch instruction again, it will
@@ -136,7 +142,9 @@ testing and debuging it. When my branch predictor can run through all the test c
 
 
 Things to do in next commit
+
 1.Finish Branch Predictor
+
 2.Branch Predictor accuracy test
 
 ## Authors
