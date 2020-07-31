@@ -265,7 +265,7 @@ module core(
 	 begin
 			RESMODE <= RESMODE + 1;                //for sp_reset
 			//FLUSH <= res ? 1 : halt ? FLUSH : (JAL||JALR||BMUX); //flush the piepline 2 stage
-			FLUSH <= res ? 1 : halt ? FLUSH : FLUSH ? FLUSH -1 : (JAL||JALR) ? 2: (XBCC) ? (BMUX ? 1:2):0  ; //flush the piepline for 3 stage
+			FLUSH <= res ? 1 : halt ? FLUSH : FLUSH ? FLUSH -1 : (JAL||JALR) ? 2: (XBCC) ? (BTB[PC[11:2]] == 0 ? (BMUX ? 1:2) : (BTB[PC[11:2]][33] ? (BMUX ? 1:2) :(BMUX?2:0))):0  ; //flush the piepline for 3 stage
 			//FLUSH <= res ? 1 : halt ? FLUSH : FLUSH ? FLUSH -1 : (JAL||JALR||BMUX) ? 2:0;
 			//assign two register
 			REG1[DPTR] <=   res ?  (RESMODE[4:0]==2 ? `__RESETSP__ : 0)  :   //reset sp
@@ -294,10 +294,10 @@ module core(
 			*/
 			//state machine for prediction
 			//assign the branch history table when first met branch
-			if(XBCC && (BTB[PC[11:2]] == 0))
+			if(BCC && (BTB[PC[11:2]] == 0))
 				BTB[PC[11:2]] <= {WEAKLY_TAKEN,SIMM};
 			
-			if(XBCC && (BTB[PC[11:2]] != 0))
+			if(BCC && (BTB[PC[11:2]] != 0))
 				BTB[PC[11:2]][33:32] <= 	BTB[PC[11:2]][33:32] == STRONGLY_TAKEN ? (BMUX? STRONGLY_TAKEN: WEAKLY_TAKEN ):
 											BTB[PC[11:2]][33:32] == WEAKLY_TAKEN ? (BMUX? STRONGLY_TAKEN : WEAKLY_NOT_TAKEN):
 											BTB[PC[11:2]][33:32] == WEAKLY_NOT_TAKEN ? (BMUX? WEAKLY_TAKEN : STRONGLY_NOT_TAKEN ):
@@ -308,11 +308,14 @@ module core(
 			NXPC <= halt ? NXPC : NXPC2;
 			NXPC2 <= res ? 32'd0 : halt ? NXPC2: //reset and halt
 								JREQ ? JVAL:          //jump & link, jump & link register, branch instruction
-								//always predict taken when first meet branch
-								(in_data[6:0] == `BCC && BTB[NXPC[11:2]] == 0 &&FLUSH == 0 )? NXPC + branch_target:
-								//behave branch prediction depends on branch history table
-								(in_data[6:0] == `BCC &&BTB[NXPC[11:2]][33] &&FLUSH == 0 )?  NXPC+BTB[NXPC[11:2]][31:0]:
-								(XBCC && !BMUX  ) ? PC+4 :
+								(in_data[6:0] == `BCC && BTB[NXPC[11:2]] == 0 &&(FLUSH == 0 || FLUSH == 1) )? NXPC + branch_target:
+								(in_data[6:0] == `BCC &&BTB[NXPC[11:2]][33]  &&(FLUSH == 0 || FLUSH == 1) )?  NXPC+BTB[NXPC[11:2]][31:0]:
+								(in_data[6:0] == `BCC &&!BTB[NXPC[11:2]][33] &&BTB[PC[11:2]] != 0 && (FLUSH == 0 || FLUSH == 1) )?  PC+4:
+								(BCC && !BMUX && BTB[PC[11:2]] == 0) ? NXPC + 4:
+								(BCC &&  BMUX && !BTB[PC[11:2]][33] && BTB[PC[11:2]] != 0) ?  PC+BTB[PC[11:2]][31:0]:
+								(BCC &&  !BMUX && BTB[PC[11:2]][33] ) ?  NXPC + 4:
+							
+								
 								NXPC2+4;              //acting normal to next instruction pc = pc + 4
 
 			PC <= halt ? PC : NXPC;
