@@ -25,7 +25,7 @@ In order to explore more possibilities and get better performance, I tried follo
 - [ ] Instruction memory cache
 - [ ] Data memory cache
 - [ ] Cache coherence protocol 
-- [ ] Branch predictor
+- [X] Branch predictor
 - [ ] Latency insensitive design (LID)
 - [ ] Other RISC-V extension
 - [ ] Multi-threading
