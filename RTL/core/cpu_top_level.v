@@ -68,7 +68,38 @@ module cpu_top_level(
 	 
 	 
 	 reg [31:0] ROMFF;  //instruction memory
-	 wire hit = 1;
+	 /*
+	 //instruction cache
+	 reg [55:0] Icache [0:63]; //instruction cache
+	 reg [63:0] Itag = 0;      //instruction cache tag
+	 
+	 wire [31:0] Idata = Icache[in_addr[7:2]][31:0];   //data
+	 wire [31:8] Iaddress = Icache[in_addr[7:2]][55:32]; //address
+	 wire hit = Itag[in_addr[7:2]] && Iaddress == in_addr[31:8];
+	 reg IFFX =0;
+	 reg IFFX2 = 0;
+	 always@(posedge clk)
+	 begin
+		ROMFF <= ROM[in_addr[11:2]];
+		if(IFFX2)
+		begin
+			IFFX2 <= 0;
+			IFFX <= 0;
+		end
+		else
+		if(!hit)
+		begin
+			Icache[in_addr[7:2]] <= {in_addr[31:8], ROMFF};
+			Itag[in_addr[7:2]] <= IFFX;
+			IFFX <= 1;
+			IFFX2 <= IFFX;
+		end
+	 end
+	 assign in_data = Idata;
+	 */
+	 
+	 
+	 wire hit = 1;   //always hit to read the instruction memory
 	 
 	 always @(posedge clk)
 	 begin
@@ -79,15 +110,16 @@ module cpu_top_level(
 	 assign in_data = ROMFF;
 	 
 	 
-	 
+	 //if the wait stage is nor performed
+	 //the read memory instruction will not performed due to the halt
 	 reg [31:0] RAMFF; //data memory data
 	 //performing wait_stage for reading RAM memroy
 	 reg[1:0] DACK = 0;
-	 wire writeHit = 1;  //write memory hit
+	 wire writeHit = 1;  //write memory always hit
 	 wire dataHit = ! ((write_e || read_e) && DACK != 1);  //data hit
 	 always@(posedge clk) 
     begin
-        DACK <= res ? 0 : DACK ? DACK-1 : (read_e||write_e) ? 1 : 0; // wait-states
+        DACK <= res ? 0 : DACK ? DACK-1 : (read_e||write_e) ? 1 : 0; // wait-states for 1 clock cycle
     end
 	 
 	 

@@ -162,9 +162,19 @@ on three stage piepline. When the piepline stages goes up, the number of clock c
 different branch situation, such as consecutive branch and branch after jump. I test the branch accuracy on different combination of gcd. 
 I'm still figured out a way to give the accuracy branch predictor rate. The appromaxiately barnch predictor accuracy rate is 90%.
 
-Things to do in next commit:
+## Fifth commit 8/31/2020 Instruction Memory Cache
+implementation:
 
-Still thinging about it. 
+1.Look up table based cache for ROM
+
+
+I implemented a LUT based cache for ROM and hope will increase the performance a lot. Currently tha implementation of ROM cache is comments out.
+It has very high cache missed rate (about 50%). I believed the problem is due to the branch predictor or HLT signal design. I'm consider using a 
+directed map cache to test.
+
+Things to do next commit:
+1.reduce the cache miss rate on ROM (consider using different cache design)
+2.Data cache on RAM. 
 
 
 ## Authors
