@@ -22,7 +22,7 @@ The core is testing using following stragtegies:
 
 In order to explore more possibilities and get better performance, I tried following features on the core:
 - [X] Piepline stage
-- [ ] Instruction memory cache
+- [X] Instruction memory cache
 - [ ] Data memory cache
 - [ ] Cache coherence protocol 
 - [X] Branch predictor
