@@ -177,6 +177,23 @@ Things to do next commit:
 2.Data cache on RAM. 
 
 
+## sixth commit 9/30/2020 RISC-V extension for AES step 1
+implementation:
+
+1.AES encryption implementation and test
+2.cache miss rate reduced. Now it's about 10% miss rate on ROM cache
+
+After severl weeks of working and testing the RAM cache, I decided to go another direction. (the RAM cache did not work out). I'll do the RAM cache later
+I'm now working on making my RISC-V core doing more efficently work of AES (Advanced Encryption Standard) algorithm. Since there are a lot of matrix computation and
+matrix manipulation in AES algorithm, using hardware approach will have a better performance than the software. (Because hardware can do a lot of matric operation parallelly.
+I implemented the 128bits AES encryption algorithm with the ECB (Electronic Code Book) mode of operation. The files in the aes folder in the RTL shows the verilog code of aes encryption.
+I will finish the AES decryption and combined it with the RISC-V core. I decided to make two new instruction in the RISC-V core to take the data in the RAM as key and plaintext to do the 
+AES encrption and decrption. The more design details will be made in next commit. 
+
+Things to do next commit:
+1.AES decryption 
+2.AES instruction i.e aese and aesd
+
 ## Authors
 
 * **Haoran Geng**  [rosegengh](https://github.com/rosegengh)
