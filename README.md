@@ -29,6 +29,7 @@ In order to explore more possibilities and get better performance, I tried follo
 - [ ] Latency insensitive design (LID)
 - [ ] Other RISC-V extension
 - [ ] Multi-threading
+- [ ] AES extension
 
 The marked symbol represents the feature that is already been implemented and tested. The other features will be 
 implemented in later commit. The performance of the core will be test on Xilinx spartan-6 fpga. The performance 
@@ -177,7 +178,7 @@ Things to do next commit:
 2.Data cache on RAM. 
 
 
-## sixth commit 9/30/2020 RISC-V extension for AES step 1
+## Sixth commit 9/30/2020 RISC-V extension for AES step 1
 implementation:
 
 1.AES encryption implementation and test
@@ -191,7 +192,9 @@ I will finish the AES decryption and combined it with the RISC-V core. I decided
 AES encrption and decrption. The more design details will be made in next commit. 
 
 Things to do next commit:
-1.AES decryption 
+
+1.AES decryption
+
 2.AES instruction i.e aese and aesd
 
 ## Authors
