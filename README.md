@@ -27,7 +27,6 @@ In order to explore more possibilities and get better performance, I tried follo
 - [ ] Cache coherence protocol 
 - [X] Branch predictor
 - [ ] Latency insensitive design (LID)
-- [ ] Other RISC-V extension
 - [ ] Multi-threading
 - [ ] AES extension
 
