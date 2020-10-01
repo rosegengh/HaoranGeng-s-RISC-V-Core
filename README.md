@@ -196,6 +196,39 @@ Things to do next commit:
 
 2.AES instruction i.e aese and aesd
 
+## Seventh commit 10/01/2020 RISC-V extension for AES step 2
+implementation:
+
+1.AES decryption implementation and test
+
+Finished the AES decryption implementation and tested. The AES module now can work perfectly on AES encryption and decryption. 
+
+File description:
+
+RTL/aes:
+
+1.aes_cipher.v the AES encryption module
+
+2.aes_decipher.v the AES decryption module
+
+3.aes_rcon.v add round key step constant generator
+
+4.sbox.v, invsbox.v the subbytes box for en/decryption
+
+5.mix_col.v the mixcolumn step for en/decryption
+
+6.aes_top_cipher.v the top level module cover both encryption and decryption.
+
+
+RTL/sim:
+
+1.aes_cipher_sim.v the simulation test for both encryption and decryption
+ 
+
+Things to do next commit:
+
+1.AES instruction i.e aese and aesd
+
 ## Authors
 
 * **Haoran Geng**  [rosegengh](https://github.com/rosegengh)

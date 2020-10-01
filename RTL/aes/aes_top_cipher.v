@@ -18,7 +18,7 @@
 // Additional Comments: 
 //
 //////////////////////////////////////////////////////////////////////////////////
-module aes_top_cipher(
+module aes_top(
 	clk,
 	rst,
 	kld,
@@ -30,16 +30,18 @@ module aes_top_cipher(
 	input kld;
 	wire	[383:0] tv = 384'h3243f6a8885a308d313198a2e03707342b7e151628aed2a6abf7158809cf4f3cd54e7519474ddb7ff5ee711cbab18dee;
 	output[127:0] text_out;
-	wire[127:0] key,text_in,plain,ciph;
+	wire[127:0] key,text_in,plain,ciph,text_in2,text_out1;
 	output done;
-	
-	assign key = kld?tv[383:256] :128'hx;
-	assign text_in = kld ? tv[255:128] : 128'hx;
+	wire done1;
+	assign key = tv[383:256];
+	assign text_in = tv[255:128];
+	assign text_in2 = tv[127:0];
 	assign plain   = tv[255:128];
+	
 	assign ciph    = tv[127:0];
 	
-	aes_cipher aes(clk,rst,kld,done,key,text_in,text_out);
-	
+	aes_cipher aes_c(clk,rst,kld,done1,key,text_in,text_out1);
+	aes_decipher aes_dc(clk,rst,kld,done1,done,key,text_in2,text_out);
 
 
 endmodule
