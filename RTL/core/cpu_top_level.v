@@ -20,6 +20,7 @@
 // Additional Comments: Referenced by darkrisc https://github.com/darklife/darkriscv
 //
 //////////////////////////////////////////////////////////////////////////////////
+
 module cpu_top_level(
 	 input clk, //clock signal
 	 input res, //reset signal
@@ -155,7 +156,7 @@ module cpu_top_level(
 	 end
 	 //load data from ram
 	 assign data_in = address[31] ?  IOMUXFF  : RAMFF; 
-	 assign halt = !hit||!dataHit||!writeHit;
+	 assign halt = !hit||!dataHit||!writeHit || !AESLOGIC;
 	 
 	 //config output for top_level
 	 always@(posedge clk)
@@ -170,7 +171,132 @@ module cpu_top_level(
             GPIOFF <= data_out[31:16];
         end
 	 end
-	 
+	
+	
+	wire EN_shiftrows_e;
+	wire EN_Addround_e;
+	wire EN_SubMix_e;
+	wire EN_SubBytes_e;
+	
+	wire Load_AES_e;
+	
+	wire DE_shiftrows_e;
+	wire DE_Addround_e;
+	wire DE_SubMix_e;
+	wire DE_SubBytes_e;
+	
+	wire Store_AES_e;
+	wire [127:0] aes_store;
+	wire [2:0] AES_FCT3;
+	wire [31:0] s1,s2,sd;
+	
+	wire [31:0] imcrypto_out;
+	wire IMLOAD_e;
+	wire IMSTORE_e;
+	wire IMMOVE_e;
+	wire IMADD_e;
+	wire IMAND_e;
+	wire IMOR_e;
+	wire IMXOR_e;
+	wire IMNOT_e;
+	wire IMSCR_e;
+	wire IMSR_e;
+	wire IMCSL_e;
+	
+	
+	reg[1:0] DelayLData= 1;
+	reg[1:0] DelayLAdd = 1;
+	reg[1:0] DelayLShift = 1;
+	reg[1:0] DelayLSubMix = 1;
+	reg[1:0] DelayLSub= 1;
+	
+	reg[1:0] DelaySData = 1;
+	reg[1:0] DelaySAdd = 1;
+	reg[1:0] DelaySShift = 1;
+	reg[1:0] DelaySSubMix = 1;
+	reg[1:0] DelaySSub= 1;
+	
+	reg[1:0] DelayIMLOAD = 1;
+	reg[1:0] DelayIMSTORE = 1;
+	reg[1:0] DelayIMMOVE = 1;
+	reg[1:0] DelayIMADD = 1;
+	reg[1:0] DelayIMAND = 1;
+	reg[1:0] DelayIMOR =1;
+	reg[1:0] DelayIMXOR = 1;
+	reg[1:0] DelayIMNOT = 1;
+	reg[1:0] DelayIMSCR = 1;
+	reg[1:0] DelayIMSR = 1;
+	reg[1:0] DelayIMCSL = 1;
+	
+	
+	
+	always@(posedge clk) 
+   begin
+        DelayLAdd <= res ? 0 : DelayLAdd ? DelayLAdd-1 : EN_Addround_e ? 1 : 0;
+		  DelayLShift <= res ? 0 : DelayLShift ? DelayLShift-1 : EN_shiftrows_e ? 1 : 0;
+		  DelayLSubMix <= res ? 0 : DelayLSubMix ? DelayLSubMix-1 : EN_SubMix_e ? 1 : 0;
+		  DelayLSub <= res ? 0 : DelayLSub ? DelayLSub-1 : EN_SubBytes_e ? 1 : 0;
+		  
+		  DelayLData <= res ? 0 : DelayLData ? DelayLData-1 : Load_AES_e ? 1 : 0;
+		  
+		  DelaySAdd <= res ? 0 : DelaySAdd ? DelaySAdd-1 : DE_Addround_e ? 1 : 0;
+		  DelaySShift <= res ? 0 : DelaySShift ? DelaySShift-1 : DE_shiftrows_e ? 1 : 0;
+		  DelaySSubMix <= res ? 0 : DelaySSubMix ? DelaySSubMix-1 : DE_SubMix_e ? 1 : 0;
+		  DelaySSub <= res ? 0 : DelaySSub ? DelaySSub-1 : DE_SubBytes_e ? 1 : 0;
+		  
+		  DelaySData <= res ? 0 : DelaySData ? DelaySData-1 : Store_AES_e ? 1 : 0;
+		  
+		  DelayIMLOAD <= res ? 0 : DelayIMLOAD ?DelayIMLOAD -1 : IMLOAD_e ? 1 : 0;
+		  DelayIMSTORE <= res ? 0: DelayIMSTORE ?DelayIMSTORE -1 : IMSTORE_e ? 1 : 0;
+		  DelayIMMOVE <= res ? 0:  DelayIMMOVE ?DelayIMMOVE -1 : IMMOVE_e ? 1 : 0;
+	     DelayIMADD <= res ? 0:   DelayIMADD ?DelayIMADD -1 : IMADD_e ? 1 : 0;
+	     DelayIMAND <= res ? 0:   DelayIMAND ?DelayIMAND -1 : IMAND_e ? 1 : 0;
+	     DelayIMOR <= res ? 0:    DelayIMOR ?DelayIMOR -1 : IMOR_e ? 1 : 0;
+	     DelayIMXOR <= res ? 0:   DelayIMXOR?DelayIMXOR -1 : IMXOR_e ? 1 : 0;
+	     DelayIMNOT <= res ? 0:   DelayIMNOT ?DelayIMNOT -1 : IMNOT_e ? 1 : 0;
+	     DelayIMSCR <= res ? 0:   DelayIMSCR ?DelayIMSCR -1 : IMSCR_e ? 1 : 0;
+	     DelayIMSR <= res ? 0:    DelayIMSR ?DelayIMSR -1 : IMSR_e ? 1 : 0;
+	     DelayIMCSL <= res ? 0:   DelayIMCSL ?DelayIMCSL -1 : IMCSL_e ? 1 : 0;
+		  
+		  
+		  
+		  
+		  
+	end
+	wire EN_Addround_done = !(EN_Addround_e && DelayLAdd == 0);
+	wire EN_shiftrows_done = !(EN_shiftrows_e && DelayLShift == 0);
+	wire EN_SubMix_done= !(EN_SubMix_e && DelayLSubMix == 0);
+	wire EN_SubBytes_done = !(EN_SubBytes_e && DelayLSub == 0);
+	
+	wire Load_AES_done = !(Load_AES_e && DelayLData == 0);
+	
+	
+	wire [127:0] aes_load = Load_AES_done ? 128'hffffffffffffffffffffffffffffffff: 0;
+	wire [31:0] imcrypto_in = IMLOAD_done ? 2323 : 0;
+	wire DE_shiftrows_done= !(DE_Addround_e && DelaySAdd == 0);
+	wire DE_Addround_done= !(DE_shiftrows_e && DelaySShift == 0);
+	wire DE_SubMix_done = !(DE_SubMix_e && DelaySSubMix == 0);
+	wire DE_SubBytes_done = !(DE_SubBytes_e && DelaySSub == 0);
+	
+	wire Store_AES_done = !(Store_AES_e && DelaySData == 0);
+	
+	
+	wire IMLOAD_done = !(IMLOAD_e && DelayIMLOAD == 0);
+	wire IMSTORE_done = !(IMSTORE_e && DelayIMSTORE == 0);
+	
+	wire IMMOVE_done = !(IMMOVE_e && DelayIMMOVE == 0);
+	wire IMADD_done = !(IMADD_e && DelayIMADD == 0);
+	wire IMAND_done = !(IMAND_e && DelayIMAND == 0);
+	wire IMOR_done = !(IMOR_e && DelayIMOR == 0);
+	wire IMXOR_done = !(IMXOR_e && DelayIMXOR == 0);
+	wire IMNOT_done = !(IMNOT_e && DelayIMNOT == 0);
+	wire IMSCR_done = !(IMSCR_e && DelayIMSCR == 0);
+	wire IMSR_done = !(IMSR_e && DelayIMSR == 0);
+	wire IMCSL_done = !(IMCSL_e && DelayIMCSL == 0);
+	
+	wire  AESLOGIC = (EN_shiftrows_done && EN_Addround_done && EN_SubMix_done  && EN_SubBytes_done && DE_shiftrows_done && DE_Addround_done && DE_SubMix_done && DE_SubBytes_done && Store_AES_done && Load_AES_done
+							&& IMLOAD_done && IMSTORE_done && IMMOVE_done && IMADD_done && IMAND_done && IMOR_done && IMXOR_done && IMNOT_done && IMSCR_done && IMSR_done && IMCSL_done);
+	
 	 core core0(
 		//.clk(!clk), 2-stage
 		.clk(clk),
@@ -178,7 +304,73 @@ module cpu_top_level(
 		.halt(halt),
 		.in_data(in_data), //instruction data
 	   .in_addr(in_addr),//instruction address 
-	
+		
+		.EN_shiftrows_done(EN_shiftrows_done),
+	   .EN_Addround_done(EN_Addround_done),
+	   .EN_SubMix_done(EN_SubMix_done),
+	   .EN_SubBytes_done(EN_SubBytes_done),
+		
+	   .Load_AES_done(Load_AES_done),
+		
+		
+	   .DE_shiftrows_done(DE_shiftrows_done),
+	   .DE_Addround_done(DE_Addround_done),
+	   .DE_SubMix_done(DE_SubMix_done),
+	   .DE_SubBytes_done(DE_SubBytes_done),
+		
+		.Store_AES_done(Store_AES_done),
+	   .aes_load(aes_load),
+		
+		
+		.imcrypto_in(imcrypto_in),
+		.IMLOAD_done(IMLOAD_done),
+		.IMSTORE_done(IMSTORE_done),
+		.IMMOVE_done(IMMOVE_done),
+		.IMADD_done(IMADD_done),
+		.IMAND_done(IMAND_done),
+		.IMOR_done(IMOR_done),
+		.IMXOR_done(IMXOR_done),
+		.IMNOT_done(IMNOT_done),
+		.IMSCR_done(IMSCR_done),
+		.IMSR_done(IMSR_done),
+		.IMCSL_done(IMCSL_done),
+		
+		.EN_shiftrows_e(EN_shiftrows_e),
+	   .EN_Addround_e(EN_Addround_e),
+	   .EN_SubMix_e(EN_SubMix_e),
+	   .EN_SubBytes_e(EN_SubBytes_e),
+		
+		.Load_AES_e(Load_AES_e),
+		
+		
+		
+		
+	   .DE_shiftrows_e(DE_shiftrows_e),
+	   .DE_Addround_e(DE_Addround_e),
+	   .DE_SubMix_e(DE_SubMix_e),
+	   .DE_SubBytes_e(DE_SubBytes_e),
+		
+		.Store_AES_e(Store_AES_e),
+		.aes_store(aes_store),
+		//.AES_FCT3(AES_FCT3),
+		
+		.imcrypto_out(imcrypto_out),
+		.IMLOAD_e(IMLOAD_e),
+		.IMSTORE_e(IMSTORE_e),
+		.IMMOVE_e(IMMOVE_e),
+		.IMADD_e(IMADD_e),
+		.IMAND_e(IMAND_e),
+		.IMOR_e(IMOR_e),
+		.IMXOR_e(IMXOR_e),
+		.IMNOT_e(IMNOT_e),
+		.IMSCR_e(IMSCR_e),
+		.IMSR_e(IMSR_e),
+		.IMCSL_e(IMCSL_e),
+		.s1(s1),
+		.s2(s2),
+		.sd(sd),
+		
+		
 	   .data_in(data_in), //input data
 	   .data_out(data_out),//out_put data
 	   .address(address), // address bus

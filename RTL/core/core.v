@@ -29,6 +29,8 @@
 `define MCC     7'b00100_11      // arithmic  rd,rs1,imm[11:0]
 `define RCC     7'b01100_11      // arithmic   rd,rs1,rs2 
 `define MAC     7'b11111_11      // mac   rd,rs1,rs2
+`define AES     7'b00001_11      //Lshiftrows rd,rs1,imm[11:0], LSubmix rd,rs1,imm,LAddroundKey rd ,rs1,imm
+`define IMC     7'b10001_11      //In memory computing operation
 `define __RESETSP__ 32'd8192     //define sp_reset
 
 
@@ -42,14 +44,76 @@ module core(
 	input res, //reset signal
 	input halt,//halt signal
 	
+	input EN_shiftrows_done,
+	input EN_Addround_done,
+	input EN_SubMix_done,
+	input EN_SubBytes_done,
+	input Load_AES_done,
+	
+	input DE_shiftrows_done,
+	input DE_Addround_done,
+	input DE_SubMix_done,
+	input DE_SubBytes_done,
+	input Store_AES_done,
+	
+	input [127:0] aes_load,
+	
+	input [31:0] imcrypto_in,
+	input IMLOAD_done,
+	input IMSTORE_done,
+	input IMMOVE_done,
+	input IMADD_done,
+	input IMAND_done,
+	input IMOR_done,
+	input IMXOR_done,
+	input IMNOT_done,
+	input IMSCR_done,
+	input IMSR_done,
+	input IMCSL_done,
+	
+	
 	//instruction set
 	input [31:0] in_data, //instruction data
 	output [31:0] in_addr,//instruction address 
 	
 	input [31:0] data_in, //input data
+	
+	output EN_shiftrows_e,
+	output EN_Addround_e,
+	output EN_SubMix_e,
+	output EN_SubBytes_e,
+	
+	output Load_AES_e,
+	
+	output DE_shiftrows_e,
+	output DE_Addround_e,
+	output DE_SubMix_e,
+	output DE_SubBytes_e,
+	
+	output Store_AES_e,
+	
+	output [31:0] imcrypto_out,
+	output IMLOAD_e,
+	output IMSTORE_e,
+	output IMMOVE_e,
+	output IMADD_e,
+	output IMAND_e,
+	output IMOR_e,
+	output IMXOR_e,
+	output IMNOT_e,
+	output IMSCR_e,
+	output IMSR_e,
+	output IMCSL_e,
+	
+	output[31:0] s1,
+	output[31:0] s2,
+	output[31:0] sd,
+	
+	
 	output [31:0] data_out,//out_put data
 	output [31:0] address, // address bus
-	
+	output [127:0] aes_store,
+	//output [2:0] AES_FCT3,
 	//for soc RAM and ROM
 	output  write_e,   //write enable
 	output  read_e	,	 //read enable
@@ -73,7 +137,8 @@ module core(
 	 reg XMCC; //arthimic imm
 	 reg XMAC; //mac
 	 reg XRCC; // arthimic register
-	 
+	 reg XAES;
+	 reg XIMC;
 	 reg[31:0] XSIMM;  //signal extended immediate
 	 reg[31:0] XUIMM;  //non-signal extended immediate
 	 //branch history table
@@ -114,6 +179,8 @@ module core(
 			XMCC   <= in_data[6:0] == `MCC;
 			XMAC  <= in_data[6:0] == `MAC;
 			XRCC   <= in_data[6:0] == `RCC;
+			XAES  <= in_data[6:0] == `AES;
+			XIMC  <= in_data[6:0] == `IMC;
 	
 			//capture only the imm value unsign extended the rest
 			XUIMM <=
@@ -123,7 +190,7 @@ module core(
 							{ALL0[31:13],in_data[31],in_data[7],in_data[30:25],in_data[11:8],ALL0[0] } : //b-type branch
 					in_data[6:0] == `SCC ?
 							{ALL0[31:12],in_data[31:25],in_data[11:7]}:  //s -type
-					in_data[6:0] == `LUI || 
+					in_data[6:0] == `LUI ||  
 					in_data[6:0] == `AUIPC ? {in_data[31:12], ALL0[11:0]} :  //u-type
 							{ALL0[31:12], in_data[31:20]};  //i-type
 			//capture only the imm value sign based on the in_data[31]
@@ -149,12 +216,19 @@ module core(
 	 //this part is for sp_reset reference the idea from darkrisc
 	 // use for halt signal
 	 wire[4:0] DPTR = res ? RESMODE:XIDATA[11:7]; //set_sp reset
+	 reg[4:0] DPTR_VALUE;
 	 wire [4:0] S1PTR  = XIDATA[19:15];  //rs1 for R,I,S,SB Type
     wire [4:0] S2PTR  = XIDATA[24:20];  //rs2 for R,S,SB Type
+	 
+	 wire [4:0] S1_ADD = XIDATA[24:20]; 
+	 wire [4:0] S2_ADD = XIDATA[19:15];
+	 wire [4:0] SD_ADD = XIDATA[11:7];
 	 
 	 wire [6:0] OPCODE = FLUSH ? 0 : XIDATA[6:0];//Op code for all function
     wire [2:0] FCT3   = XIDATA[14:12]; // R,I,S,SB-type 14:12 function3
     wire [6:0] FCT7   = XIDATA[31:25]; //R-TYPE 31:25 function 7
+	 wire [7:0] FCT8   = XIDATA[14:7];
+	 wire [4:0] AESINDEX = XIDATA[11:7];
 	 
 	 wire [31:0] SIMM  = XSIMM;
     wire [31:0] UIMM  = XUIMM;
@@ -175,7 +249,9 @@ module core(
     
     wire    RCC = FLUSH ? 0 : XRCC; // OPCODE==7'b0110011; FCT3 arithmic register
     wire    MAC = FLUSH ? 0 : XMAC; // OPCODE==7'b0110011; FCT3 mac rd rs1 rs2 
-	 	 
+	 	
+	 wire    AES = FLUSH ? 0 : XAES;
+	 wire    IMC = FLUSH ? 0 : XIMC;
 	 //finish op code decode
 	 
 	 reg [31:0] NXPC2; //program counter next two instruction for 3 stage
@@ -193,7 +269,8 @@ module core(
     
     wire          [31:0] U1REG = REG1[S1PTR];
     wire          [31:0] U2REG = REG2[S2PTR];
-	 
+	 wire          [127:0] AES_DATA = 0;
+
 	 //execution for specific type of instruction
 	 
 	 //decode based on function code
@@ -214,7 +291,7 @@ module core(
 																                      { FCT3==1&&data_in[31] ? ALL1[31:16]:ALL0[31:16] , data_in[31:16]}): //load second half
 																  data_in;
 	 //Store Function code decode (OPCODE==7'b0100011)
-	 wire [31:0] SDATA = FCT3== 0 ? /*check for store bytes SB, load the  data in rs2 based on address into SDATA*/
+	 wire [31:0] SDATA = (FCT3== 0) ? /*check for store bytes SB, load the  data in rs2 based on address into SDATA*/
 			(address[1:0] == 1 ? {ALL0[31:16],U2REG[7:0],ALL0[7:0]}: //second quater in rs2
 			 address[1:0] == 2 ? {ALL0[31:24],U2REG[7:0],ALL0[15:0]}://third quater in rs2
 			 address[1:0] == 3 ? {U2REG[7:0],ALL0[23:0]}:           //fourth quater in rs2
@@ -223,7 +300,19 @@ module core(
 			(address[1:0] == 0 ? {ALL0[31:16], U2REG[15:0]}: //first half in rs2
 			                     {U2REG[31:16], ALL0[15:0]})://second half in rs2
 			               U2REG;
-								
+	
+	 wire [31:0]AES_DATA1  = (AES  && FCT8 == 1) ? REG2[31]:  0;
+	 wire [31:0]AES_DATA2  = (AES  && FCT8 == 1) ? REG2[30]:  0;
+	 wire [31:0]AES_DATA3  = (AES  && FCT8 == 1) ? REG2[29]:  0;
+	 wire [31:0]AES_DATA4  = (AES  && FCT8 == 1) ? REG2[28]:  0;
+	 
+	 wire [31:0]AES_LDATA1  = (AES  && FCT8 == 0) ? aes_load[127:96]:  0;
+	 wire [31:0]AES_LDATA2  = (AES  && FCT8 == 0) ? aes_load[95:64]:  0;
+	 wire [31:0]AES_LDATA3  = (AES  && FCT8 == 0) ? aes_load[63:32]:  0;
+	 wire [31:0]AES_LDATA4  = (AES  && FCT8 == 0) ? aes_load[31:0]:  0;
+	 
+	 wire [31:0] IMC_DATAOUT = (AES  && FCT8 == 65) ? U1REG:  0;
+							
 	 //main ALU for execution stage (OPCODEs==7'b0010011/7'b0110011) 
 	 //Create the register rs2 for sign and unsign
 	 
@@ -259,33 +348,86 @@ module core(
 	 wire        JREQ = (JAL||JALR);
 	 //jump to instuction address or direct on current PC
     wire [31:0] JVAL = SIMM + (JALR? U1REG/*jump register?*/ : PC /*branch or direct jump on current PC*/);
+	 //wire  AESLOGIC = (Load_shiftrows_done && Load_Addround_done && Load_SubMix_done  && Load_SubBytes_done && Store_shiftrows_done && Store_Addround_done && Sotre_SubMix_done && Sotre_SubBytes_done);
 	
 	 //Main data workflow Clock
 	 always@(posedge clk)
 	 begin
 			RESMODE <= RESMODE + 1;                //for sp_reset
 			//FLUSH <= res ? 1 : halt ? FLUSH : (JAL||JALR||BMUX); //flush the piepline 2 stage
-			FLUSH <= res ? 1 : halt ? FLUSH : FLUSH ? FLUSH -1 : (JAL||JALR) ? 2: (XBCC) ? (BTB[PC[11:2]] == 0 ? (BMUX ? 1:2) : (BTB[PC[11:2]][33] ? (BMUX ? 1:2) :(BMUX?2:0))):0  ; //flush the piepline for 3 stage
+			FLUSH <= res ? 1 : halt ? FLUSH : FLUSH ? FLUSH -1 : (JAL||JALR) ? 2: (XBCC) ? (BTB[PC[11:2]] == 0 ? (BMUX ? 1:2) : (BTB[PC[11:2]][33] ? (BMUX ? 1:2) :(BMUX?2:0))):0; //flush the piepline for 3 stage
 			//FLUSH <= res ? 1 : halt ? FLUSH : FLUSH ? FLUSH -1 : (JAL||JALR||BMUX) ? 2:0;
 			//assign two register
-			REG1[DPTR] <=   res ?  (RESMODE[4:0]==2 ? `__RESETSP__ : 0)  :   //reset sp
-											  halt ? REG1[DPTR]:   //halt
-											  DPTR == 0 ? 0:
-											  AUIPC ? PC+SIMM: // add imm to pc
-											  JAL || JALR ? NXPC: // jump to next pc 
-											  LUI ? SIMM:      //loade imm to register
-											  LCC ? LDATA:     //loade take memory out
-											  MCC || RCC ? RMDATA: //r-type take alu out
-											  REG1[DPTR];
-			REG2[DPTR] <=   res ?  (RESMODE[4:0]==2 ? `__RESETSP__ : 0)  :   //reset sp
-											  halt ? REG1[DPTR]:   //halt
-											  DPTR == 0 ? 0:
-											  AUIPC ? PC+SIMM: // add imm to pc
-											  JAL || JALR ? NXPC: // jump to next pc 
-											  LUI ? SIMM:      //loade imm to register
-											  LCC ? LDATA:     //loade take memory out
-											  MCC || RCC ? RMDATA: //r-type take alu out
-											  REG2[DPTR];
+			DPTR_VALUE <= DPTR;
+			if (AES  && (FCT8 == 0))begin
+				REG1[31] <=  res ?  (RESMODE[4:0]==2 ? `__RESETSP__ : 0)  :   //reset sp
+													  halt ? REG1[31]:   //halt
+													  AES_LDATA1;
+				REG1[30] <=  res ?  (RESMODE[4:0]==2 ? `__RESETSP__ : 0)  :   //reset sp
+													  halt ? REG1[30]:   //halt
+													  AES_LDATA2;
+			   REG1[29] <=  res ?  (RESMODE[4:0]==2 ? `__RESETSP__ : 0)  :   //reset sp
+													  halt ? REG1[29]:   //halt
+													  AES_LDATA3;
+				REG1[28] <=  res ?  (RESMODE[4:0]==2 ? `__RESETSP__ : 0)  :   //reset sp
+													  halt ? REG1[28]:   //halt
+													  AES_LDATA4;
+													  
+				REG2[31] <=  res ?  (RESMODE[4:0]==2 ? `__RESETSP__ : 0)  :   //reset sp
+													  halt ? REG2[31]:   //halt
+													  AES_LDATA1;
+				REG2[30] <=  res ?  (RESMODE[4:0]==2 ? `__RESETSP__ : 0)  :   //reset sp
+													  halt ? REG2[30]:   //halt
+													  AES_LDATA2;
+			   REG2[29] <=  res ?  (RESMODE[4:0]==2 ? `__RESETSP__ : 0)  :   //reset sp
+													  halt ? REG2[29]:   //halt
+													  AES_LDATA3;
+				REG2[28] <=  res ?  (RESMODE[4:0]==2 ? `__RESETSP__ : 0)  :   //reset sp
+													  halt ? REG2[28]:   //halt
+													  AES_LDATA4;
+
+			end 
+			else if (AES && FCT8 == 64) begin
+				REG1[S1PTR] <=  res ? (RESMODE[4:0]==2 ? `__RESETSP__ : 0)  :   //reset sp
+													  halt ? REG1[S1PTR]:   //halt
+													  imcrypto_in;
+				REG2[S1PTR] <=  res ? (RESMODE[4:0]==2 ? `__RESETSP__ : 0)  :   //reset sp
+													  halt ? REG2[S1PTR]:   //halt
+													  imcrypto_in;
+			end
+			
+			
+			else begin
+				REG1[DPTR] <=   res ?  (RESMODE[4:0]==2 ? `__RESETSP__ : 0)  :   //reset sp
+													  halt ? REG1[DPTR]:   //halt
+													  DPTR == 0 ? 0:
+													  AUIPC ? PC+SIMM: // add imm to pc
+													  JAL || JALR ? NXPC: // jump to next pc 
+													  LUI  ? SIMM:      //loade imm to register
+													  LCC ? LDATA:     //loade take memory out
+													  MCC || RCC ? RMDATA: //r-type take alu out
+													 
+													  REG1[DPTR];
+								
+				REG2[DPTR] <=   res ?  (RESMODE[4:0]==2 ? `__RESETSP__ : 0)  :   //reset sp
+													  halt ? REG1[DPTR]:   //halt
+													  DPTR == 0 ? 0:
+													  AUIPC ? PC+SIMM: // add imm to pc
+													  JAL || JALR ? NXPC: // jump to next pc 
+													  LUI ? SIMM:      //loade imm to register
+													  LCC  ? LDATA:     //loade take memory out
+													  MCC || RCC ? RMDATA: //r-type take alu out
+												
+													  REG2[DPTR];
+			end
+													 
+				
+		  //REG1[31] <= (AESL  &&(FCT3 == 2)) ? AES_LDATA1 : REG1[31];
+			
+											 
+											 
+			
+											 
 			//program counter decode for next pc
 			/*2stage
 			NXPC <= res ? 32'd0: halt ? NXPC:     //reset and halt
@@ -314,6 +456,7 @@ module core(
 								(BCC && !BMUX && BTB[PC[11:2]] == 0) ? NXPC + 4:
 								(BCC &&  BMUX && !BTB[PC[11:2]][33] && BTB[PC[11:2]] != 0) ?  PC+BTB[PC[11:2]][31:0]:
 								(BCC &&  !BMUX && BTB[PC[11:2]][33] ) ?  NXPC + 4:
+								
 							
 								
 								NXPC2+4;              //acting normal to next instruction pc = pc + 4
@@ -323,10 +466,50 @@ module core(
 	 end
 	 //IO and memory interface
 	 assign data_out = SDATA; //store to memory
+	 assign aes_store = {AES_DATA1,AES_DATA2,AES_DATA3,AES_DATA4};
 	 assign address = U1REG + SIMM;//memory access address
 	 
 	 assign read_e = LCC; //read memory only on load
 	 assign write_e = SCC; //write memory only on store 
+	 
+	 assign Load_AES_e = AES && (FCT8 == 0) ? 1 :0;
+	 assign Store_AES_e = AES && (FCT8 == 1) ?  1 :0;
+	 
+	 assign EN_Addround_e = AES && (FCT8 == 4) ? 1 :0;
+	 assign EN_shiftrows_e = AES && (FCT8 == 8) ? 1 :0;
+	 assign EN_SubMix_e = AES && (FCT8 == 16) ? 1 :0;
+	 assign EN_SubBytes_e = AES && (FCT8 == 32) ? 1 :0;
+	 
+	 assign DE_Addround_e = AES && (FCT8 == 5) ? 1 :0;
+	 assign DE_shiftrows_e = AES && (FCT8 == 9) ? 1 :0;
+	 assign DE_SubMix_e = AES && (FCT8 == 17) ? 1 :0;
+	 assign DE_SubBytes_e = AES && (FCT8 == 33) ? 1 :0;
+	 
+	 assign IMLOAD_e = AES && (FCT8 == 64) ? 1 : 0;
+	 assign IMSTORE_e = AES && (FCT8 == 65) ? 1 : 0;
+	 
+
+	 assign IMMOVE_e = IMC && (FCT3 == 0) && (FCT7 == 0) ? 1 : 0;
+	 assign IMADD_e = IMC && (FCT3 == 1) && (FCT7 == 0)? 1 : 0;
+	 assign IMAND_e = IMC && (FCT3 == 2) && (FCT7 == 0)? 1 : 0;
+	 assign IMOR_e = IMC && (FCT3 == 3) && (FCT7 == 0)? 1 : 0;
+	 assign IMXOR_e = IMC && (FCT3 == 4) && (FCT7 == 0)? 1 : 0;
+	 assign IMNOT_e = IMC && (FCT3 == 5) && (FCT7 == 0)? 1 : 0;
+	 assign IMSCR_e = IMC && (FCT3 == 6) && (FCT7 == 0)? 1 : 0;
+	 assign IMSR_e = IMC && (FCT3 == 7) && (FCT7 == 0)? 1 : 0;
+	 assign IMCSL_e = IMC && (FCT3 == 0) && (FCT7 == 64)? 1 : 0;
+	 
+	 
+	 assign imcrypto_out = AES && (FCT8 == 65) ? IMC_DATAOUT:0;
+	 
+	 assign s1 = IMC  ?  REG2[S1_ADD] : 0;
+	 assign s2 = IMC  ?  REG2[S2_ADD] : 0;
+	 assign sd = AES  ?  SIMM : IMC ? REG2[SD_ADD] : 0;
+	
+
+
+	 
+	 //assign AES_FCT3 = (AESL || AESS) ? FCT3 : 0;
 	 
 	 //memeory based in the SCC and LCC
 	 assign BE = FCT3==0||FCT3==4 ? ( address[1:0]==3 ? 4'b1000 : // sb/lb 
